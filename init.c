@@ -126,7 +126,7 @@ size_t retbytes(char* statfile, int field, uint64_t *operations)
         fclose( input_file );
     }
 
-    return (operations >= 0) ? 1 : 0;
+    return (*operations >= 0) ? 1 : 0;
 
 }
 /////////////////////////////////////////////////////////////
