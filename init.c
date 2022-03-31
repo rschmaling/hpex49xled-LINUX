@@ -78,14 +78,14 @@ char* retpath( char* parent, char *delim, int field )
 }
 /////////////////////////////////////////////////////////////////////
 //// parse the statfile and get I/O read and I/O write
-int64_t retbytes(char* statfile, int field)
+uint64_t retbytes(char* statfile, int field)
 {
     const char *delimiter_characters = " ";
     char buffer[ BUFFER_SIZE ];
     char *last_token;
     char *end;
     int token = 0;
-    int64_t found = 0;
+    uint64_t found = 0;
 
     FILE *input_file = fopen( statfile, "r" );
 
@@ -133,7 +133,6 @@ int64_t retbytes(char* statfile, int field)
 //// run disk monintoring thread for HP EX48x or EX49x
 void* acer_thread_run (void *arg)
 {
-	int64_t n_rio, n_wio = 0;
 	struct hpled hpex49x = *(struct hpled *)arg;
 	int led_state = 0;
 	struct timespec tv = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
@@ -142,13 +141,15 @@ void* acer_thread_run (void *arg)
 	while(thread_run) {
 
 			if( (pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK ){
-
+				
+				thread_run = 0;
+				pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
 				syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d",thId, __FUNCTION__, __LINE__ );
 				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
 			}
 
-			n_rio = retbytes(hpex49x.statfile, 0);
-			n_wio = retbytes(hpex49x.statfile, 4);
+			hpex49x.n_rio = retbytes(hpex49x.statfile, 0);
+			hpex49x.n_wio = retbytes(hpex49x.statfile, 4);
 
 			if( (pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
@@ -156,13 +157,13 @@ void* acer_thread_run (void *arg)
 			if(debug)
 				printf("the disk is: %li \n", hpex49x.hphdd);
 
-			if( ( hpex49x.rio != n_rio ) && ( hpex49x.wio != n_wio) ) {
+			if( ( hpex49x.rio != hpex49x.n_rio ) && ( hpex49x.wio != hpex49x.n_wio) ) {
 
-				hpex49x.rio = n_rio;
-				hpex49x.wio = n_wio;
+				hpex49x.rio = hpex49x.n_rio;
+				hpex49x.wio = hpex49x.n_wio;
 
 				if(debug) {
-					printf("Read I/O = %li Write I/O = %li \n", n_rio, n_wio);
+					printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -172,12 +173,12 @@ void* acer_thread_run (void *arg)
 				led_state = 1;
 
 			}
-			else if( hpex49x.rio != n_rio ) {
+			else if( hpex49x.rio != hpex49x.n_rio ) {
 
-				hpex49x.rio = n_rio;
+				hpex49x.rio = hpex49x.n_rio;
 
 				if(debug) {
-					printf("Read I/O only and is: %li \n", n_rio);
+					printf("Read I/O only and is: %li \n", hpex49x.n_rio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -185,12 +186,12 @@ void* acer_thread_run (void *arg)
 				set_acer_led(LED_RED, ON, hpex49x.red, thId);
 				led_state = 1;
 			}
-			else if( hpex49x.wio != n_wio ) {
+			else if( hpex49x.wio != hpex49x.n_wio ) {
 
-				hpex49x.wio = n_wio;
+				hpex49x.wio = hpex49x.n_wio;
 
 				if(debug) {
-					printf("Write I/O only and is: %li \n", n_wio);
+					printf("Write I/O only and is: %li \n", hpex49x.n_wio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -218,7 +219,6 @@ void* acer_thread_run (void *arg)
 //// run disk monintoring thread for HP EX48x or EX49x
 void* hpex49x_thread_run (void *arg)
 {
-	int64_t n_rio, n_wio = 0;
 	struct hpled hpex49x = *(struct hpled *)arg;
 	int led_state = 0;
 	struct timespec tv = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
@@ -228,11 +228,13 @@ void* hpex49x_thread_run (void *arg)
 
 			if( (pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK ){
 
+				thread_run = 0;
+				pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
 				syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d",thId, __FUNCTION__, __LINE__ );
 				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
 			}
-			n_rio = retbytes(hpex49x.statfile, 0);
-			n_wio = retbytes(hpex49x.statfile, 4);
+			hpex49x.n_rio = retbytes(hpex49x.statfile, 0);
+			hpex49x.n_wio = retbytes(hpex49x.statfile, 4);
 
 			if( (pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
@@ -240,13 +242,13 @@ void* hpex49x_thread_run (void *arg)
 			if(debug)
 				printf("the disk is: %li \n", hpex49x.hphdd);
 
-			if( ( hpex49x.rio != n_rio ) && ( hpex49x.wio != n_wio) ) {
+			if( ( hpex49x.rio != hpex49x.n_rio ) && ( hpex49x.wio != hpex49x.n_wio) ) {
 
-				hpex49x.rio = n_rio;
-				hpex49x.wio = n_wio;
+				hpex49x.rio = hpex49x.n_rio;
+				hpex49x.wio = hpex49x.n_wio;
 
 				if(debug) {
-					printf("Read I/O = %li Write I/O = %li \n", n_rio, n_wio);
+					printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -257,12 +259,12 @@ void* hpex49x_thread_run (void *arg)
 				led_state = 1;
 
 			}
-			else if( hpex49x.rio != n_rio ) {
+			else if( hpex49x.rio != hpex49x.n_rio ) {
 
-				hpex49x.rio = n_rio;
+				hpex49x.rio = hpex49x.n_rio;
 
 				if(debug) {
-					printf("Read I/O only and is: %li \n", n_rio);
+					printf("Read I/O only and is: %li \n", hpex49x.n_rio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -270,12 +272,12 @@ void* hpex49x_thread_run (void *arg)
 				set_hpex_led(LED_RED, ON, hpex49x.red, thId);
 				led_state = 1;
 			}
-			else if( hpex49x.wio != n_wio ) {
+			else if( hpex49x.wio != hpex49x.n_wio ) {
 
-				hpex49x.wio = n_wio;
+				hpex49x.wio = hpex49x.n_wio;
 
 				if(debug) {
-					printf("Write I/O only and is: %li \n", n_wio);
+					printf("Write I/O only and is: %li \n", hpex49x.n_wio);
 					printf("HP HDD is: %li \n", hpex49x.hphdd);
 					printf("Thread ID: %ld \n",thId);
 				}
@@ -451,7 +453,8 @@ void* disk_init(void *arg)
 			printf("The host controller is : %s \n", host_bus);	
 		if( !(find_ATA = retpath(statpath,"/",4)))
 			err(1, "NULL return from retpath in %s for find_ATA", __FUNCTION__);
-		/* since the HPEX49x only has 4 bays and they are located on either ata1 or ata2 with fixed a host bus - allocate them like this. */
+		/* since the HPEX49x only has 4 bays and they are located on ata2 through ata5 - allocate them like this. */
+		/* I do not know if this is the same for ACER h340-342/Altos */
 		if( (strcmp("ata2",find_ATA) )== 0 && (strcmp("host1", host_bus)) == 0 ) {
 
 			if( (ide0.statfile = (char *)calloc(128, sizeof(char))) == NULL)
@@ -464,7 +467,9 @@ void* disk_init(void *arg)
 			if ( (ide0.rio = retbytes(ide0.statfile, 0)) < 0)
 			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
 			if( (ide0.wio = retbytes(ide0.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+				err(1, "Error on return from retbytes in %s ", __FUNCTION__);
+			ide0.n_rio = 0;
+			ide0.n_wio = 0;	
 			hpex49x[numdisks] = ide0;
 			syslog(LOG_NOTICE,"Adding %s Disk 1 to monitor pool.", desc());
 			syslog(LOG_NOTICE,"Statfile path for Disk 1 is %s",hpex49x[numdisks].statfile);
@@ -483,7 +488,9 @@ void* disk_init(void *arg)
 			if( (ide1.rio = retbytes(ide1.statfile, 0)) < 0)
 			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
 			if( (ide1.wio = retbytes(ide1.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+				err(1, "Error on return from retbytes in %s ", __FUNCTION__);
+			ide1.n_rio = 0;
+			ide1.n_wio = 0;	
 			hpex49x[numdisks] = ide1;
 			syslog(LOG_NOTICE,"Adding %s Disk 2 to monitor pool.", desc());
 			syslog(LOG_NOTICE,"Statfile path for Disk 2 is %s",hpex49x[numdisks].statfile);
@@ -503,6 +510,8 @@ void* disk_init(void *arg)
 			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
 			if( (ide2.wio = retbytes(ide2.statfile, 4)) < 0)
 				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+			ide2.n_rio = 0;
+			ide2.n_wio = 0;
 			hpex49x[numdisks] = ide2;
 			syslog(LOG_NOTICE,"Adding %s Disk 3 to monitor pool.", desc());
 			syslog(LOG_NOTICE,"Statfile path for Disk 3 is %s",hpex49x[numdisks].statfile);
@@ -522,6 +531,8 @@ void* disk_init(void *arg)
 			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
 			if( (ide3.wio = retbytes(ide3.statfile, 4)) < 0)
 				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+			ide3.n_rio = 0;
+			ide3.n_wio = 0;
 			hpex49x[numdisks] = ide3;
 			syslog(LOG_NOTICE,"Adding %s Disk 4 to monitor pool.", desc());
 			syslog(LOG_NOTICE,"Statfile path for Disk 4 is %s",hpex49x[numdisks].statfile);
@@ -1126,7 +1137,7 @@ void set_hpex_led( int led_type, int state, size_t led, pthread_t thread_id )
 /// @param thread_id ID of the calling thread - for diagnostic purposes
 void set_acer_led( int led_type, int state, size_t led, pthread_t thread_id ) 
 {
-	if( (pthread_spin_lock(&hpex49x_gpio_lock2)) != 0 )
+	if( (pthread_spin_lock(&hpex49x_gpio_lock2)) == EDEADLOCK )
 		err(1,"Invalid return from pthread_spin_lock for thread %ld in %s line %d", thread_id, __FUNCTION__, __LINE__);
 
 	if ( led_type & LED_BLUE ) setgpregslvl( led, state );
@@ -1194,10 +1205,10 @@ void sigterm_handler(int s)
 	if(update_monitor){
 		if(update_thread_instance == 1){
 			update_thread_instance = 0;
-			if(pthread_cancel(updatemonitor) != 0)
-				err(1, "Unable to cancel update monitor thread in %s", __FUNCTION__);
-			if( (pthread_join(updatemonitor, NULL)) != 0)
-				err(1, "Unable to join update_monitor_thread in %s before close", __FUNCTION__);
+		if(pthread_cancel(updatemonitor) != 0)
+			err(1, "Unable to cancel update monitor thread in %s", __FUNCTION__);
+		if( (pthread_join(updatemonitor, NULL)) != 0)
+			err(1, "Unable to join update_monitor_thread in %s before close", __FUNCTION__);
 		}
 	}
 	pthread_attr_destroy(&attr);

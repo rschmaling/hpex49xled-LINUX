@@ -47,6 +47,11 @@
 /////// - added pthread_spin_lock and pthread_spin_unlock to resolve race issue
 /////// - as a 'just in case' added pthread_spin_lock/unlock to the LED control function to give exclusive access during on/off writes.
 /////// - ensure that the function that taking the return from retpath() calls free() when finished.
+///////
+/////// - March 15, 2022
+/////// - Added updatemonitor.c to complete the conversion and prepare for FreeBSD port.
+/////// - added second pthread_spin_lock/unlock - this way locking occurs independently based on critical section
+///////
 
 #include "hpex49xled.h"
 
@@ -117,10 +122,12 @@ size_t get_led_interface(void)
 {
 	const char *systemVendor = systemid("dmi", "id", "sys_vendor");
 	const char *productName = systemid("dmi", "id", "product_name");
+	const char *biosVersion = systemid("dmi", "id", "bios_version");
 	
 	if(debug) {
-		printf("--- SystemVendor: %s \n", systemVendor);
-		printf("--- ProductName: %s \n", productName);
+		printf("--- SystemVendor : %s \n", systemVendor);
+		printf("--- ProductName  : %s \n", productName);
+		printf("--- Bios Version : %s \n", biosVersion);
 	}
 
 	if (strcmp(systemVendor, "Acer") == 0) {
@@ -173,7 +180,10 @@ size_t get_led_interface(void)
 		if(strcmp(productName, "MediaSmart Server") == 0) {
 			if(debug) 
 				printf("Recognized ProductName: %s \n", productName);
-			hardware = "HP MediaSmart Server 48X or 49X";
+			if(strcmp("EX49x 1.00", biosVersion) == 0) // validate and let author know if different for your EX49x
+				hardware = "HP MediaSmart Server 49X";
+			else
+				hardware = "HP Mediasmart Server 48X";
 			HP = 1;
 			if ( init_hpex49x() ) 
 				return 1;

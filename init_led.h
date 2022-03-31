@@ -82,7 +82,7 @@ void setsystemled( int led_type, int state );
 /* global signal handler - declare extern in other source files or headers */
 void sigterm_handler(int s);
 /* break up the strings for the statfile or fields - retpath() requires free() on return */
-int64_t retbytes(char* statfile, int field);
+uint64_t retbytes(char* statfile, int field);
 char* retpath( char* parent, char *delim, int field );
 void* disk_init (void * arg);
 /* thread runner for disk monitoring */
@@ -128,12 +128,14 @@ size_t thread_run = 0;
 size_t update_monitor = 0;
 
 struct hpled {
-        char* statfile;
-		size_t blue;
-		size_t red;
-        size_t hphdd;
-        int64_t rio;
-        int64_t wio;
+    char* statfile;
+	size_t blue;
+	size_t red;
+    size_t hphdd;
+    uint64_t rio;
+	uint64_t n_rio;
+    uint64_t wio;
+	uint64_t n_wio;
 };
 
 struct hpled ide0, ide1, ide2, ide3 ;
