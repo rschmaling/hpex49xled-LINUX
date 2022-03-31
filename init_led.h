@@ -82,7 +82,7 @@ void setsystemled( int led_type, int state );
 /* global signal handler - declare extern in other source files or headers */
 void sigterm_handler(int s);
 /* break up the strings for the statfile or fields - retpath() requires free() on return */
-uint64_t retbytes(char* statfile, int field);
+size_t retbytes(char* statfile, int field, uint64_t *operations);
 char* retpath( char* parent, char *delim, int field );
 void* disk_init (void * arg);
 /* thread runner for disk monitoring */

@@ -78,19 +78,19 @@ char* retpath( char* parent, char *delim, int field )
 }
 /////////////////////////////////////////////////////////////////////
 //// parse the statfile and get I/O read and I/O write
-uint64_t retbytes(char* statfile, int field)
+size_t retbytes(char* statfile, int field, uint64_t *operations)
 {
     const char *delimiter_characters = " ";
     char buffer[ BUFFER_SIZE ];
     char *last_token;
     char *end;
     int token = 0;
-    uint64_t found = 0;
+    // uint64_t found = 0;
 
     FILE *input_file = fopen( statfile, "r" );
 
     if( input_file == NULL ) {
-		err(1, "Unable to open statfile in retbytes() ");
+		err(1, "Unable to open statfile in %s line %d", __FUNCTION__, __LINE__);
     }
     else {
 
@@ -104,12 +104,12 @@ uint64_t retbytes(char* statfile, int field)
 
             while( (last_token != NULL) && (token <= field) ){
                 if( token == field) {
-                        found = strtoll( last_token, &end, 10 );
+                        *operations = strtoul( last_token, &end, 10 );
 					if(*end)
-						err(1, "Unable to convert string to int64_t in retbytes()");
+						err(1, "Unable to convert string to int64_t in %s line %d", __FUNCTION__, __LINE__);
 
 					if(debug)
-                        	printf("The value of field %i is %li \n", token, found);
+                        	printf("The value of field %i is %ld \n", token, *operations);
 					break;
                 }
                 last_token = strtok( NULL, delimiter_characters );
@@ -126,7 +126,7 @@ uint64_t retbytes(char* statfile, int field)
         fclose( input_file );
     }
 
-    return found;
+    return (operations >= 0) ? 1 : 0;
 
 }
 /////////////////////////////////////////////////////////////
@@ -148,10 +148,13 @@ void* acer_thread_run (void *arg)
 				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
 			}
 
-			hpex49x.n_rio = retbytes(hpex49x.statfile, 0);
-			hpex49x.n_wio = retbytes(hpex49x.statfile, 4);
+			if((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
+				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
 
-			if( (pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
+			if((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0 )
+				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+
+			if((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
 
 			if(debug)
@@ -233,8 +236,11 @@ void* hpex49x_thread_run (void *arg)
 				syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d",thId, __FUNCTION__, __LINE__ );
 				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
 			}
-			hpex49x.n_rio = retbytes(hpex49x.statfile, 0);
-			hpex49x.n_wio = retbytes(hpex49x.statfile, 4);
+			if((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
+				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+			
+			if((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0 )
+				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
 
 			if( (pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
@@ -452,22 +458,22 @@ void* disk_init(void *arg)
 		if (debug)
 			printf("The host controller is : %s \n", host_bus);	
 		if( !(find_ATA = retpath(statpath,"/",4)))
-			err(1, "NULL return from retpath in %s for find_ATA", __FUNCTION__);
+			err(1, "NULL return from retpath in %s line %d for find_ATA", __FUNCTION__, __LINE__);
 		/* since the HPEX49x only has 4 bays and they are located on ata2 through ata5 - allocate them like this. */
 		/* I do not know if this is the same for ACER h340-342/Altos */
 		if( (strcmp("ata2",find_ATA) )== 0 && (strcmp("host1", host_bus)) == 0 ) {
 
 			if( (ide0.statfile = (char *)calloc(128, sizeof(char))) == NULL)
-				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
+				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
 			if( !(strcpy(ide0.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s ", __FUNCTION__);
+				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide0.statfile is: %s \n", ide0.statfile);
 			ide0.hphdd = 1;
-			if ( (ide0.rio = retbytes(ide0.statfile, 0)) < 0)
-			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
-			if( (ide0.wio = retbytes(ide0.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);
+			if ( (retbytes(ide0.statfile, 0, &ide0.rio)) == 0)
+			       err(1, "Error on return from retbytes() in %s line %d ", __FUNCTION__, __LINE__);
+			if( ( retbytes(ide0.statfile, 4, &ide0.wio)) == 0)
+				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
 			ide0.n_rio = 0;
 			ide0.n_wio = 0;	
 			hpex49x[numdisks] = ide0;
@@ -479,16 +485,16 @@ void* disk_init(void *arg)
 		}
 		else if( (strcmp("ata3",find_ATA)) == 0 && (strcmp("host2", host_bus)) == 0) {
 			if( (ide1.statfile = (char *)calloc(128, sizeof(char))) == NULL)
-				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
+				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
 			if( !(strcpy(ide1.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s ", __FUNCTION__);
+				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide1.statfile is: %s \n", ide1.statfile);
 			ide1.hphdd = 2;
-			if( (ide1.rio = retbytes(ide1.statfile, 0)) < 0)
-			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
-			if( (ide1.wio = retbytes(ide1.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);
+			if( ( retbytes(ide1.statfile, 0, &ide1.rio)) == 0)
+			       err(1, "Error on return from retbytes() in %s line %d ", __FUNCTION__, __LINE__);
+			if( ( retbytes(ide1.statfile, 4, &ide1.wio)) == 0)
+				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
 			ide1.n_rio = 0;
 			ide1.n_wio = 0;	
 			hpex49x[numdisks] = ide1;
@@ -500,16 +506,16 @@ void* disk_init(void *arg)
 		}
 		else if( (strcmp("ata4",find_ATA)) == 0 && (strcmp("host3", host_bus)) == 0) {
 			if( (ide2.statfile = (char *)calloc(128, sizeof(char))) == NULL)
-				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
+				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d ", __FUNCTION__, __LINE__);
 			if( !(strcpy(ide2.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s ", __FUNCTION__);
+				err(1, "Unable to strcpy() path into statpath in %s line %d ", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide2.statfile is: %s \n", ide2.statfile);
 			ide2.hphdd = 3;
-			if( (ide2.rio = retbytes(ide2.statfile, 0)) < 0)
-			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
-			if( (ide2.wio = retbytes(ide2.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+			if( ( retbytes(ide2.statfile, 0, &ide2.rio)) == 0)
+			       err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+			if( ( retbytes(ide2.statfile, 4, &ide2.wio)) == 0)
+				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);	
 			ide2.n_rio = 0;
 			ide2.n_wio = 0;
 			hpex49x[numdisks] = ide2;
@@ -523,14 +529,14 @@ void* disk_init(void *arg)
 			if( (ide3.statfile = (char *)calloc(128, sizeof(char))) == NULL)
 				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
 			if( !(strcpy(ide3.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s ", __FUNCTION__);
+				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide3.statfile is: %s \n", ide3.statfile);
 			ide3.hphdd = 4;
-			if( (ide3.rio = retbytes(ide3.statfile, 0)) < 0)
-			       err(1, "Error on return from retbytes in %s ", __FUNCTION__);
-			if( (ide3.wio = retbytes(ide3.statfile, 4)) < 0)
-				err(1, "Error on return from retbytes in %s ", __FUNCTION__);	
+			if( ( retbytes(ide3.statfile, 0, &ide3.rio)) == 0)
+			       err(1, "Error on return from retbytes in %s line %d ", __FUNCTION__, __LINE__);
+			if( ( retbytes(ide3.statfile, 4, &ide3.wio)) == 0)
+				err(1, "Error on return from retbytes in %s line %d", __FUNCTION__, __LINE__);	
 			ide3.n_rio = 0;
 			ide3.n_wio = 0;
 			hpex49x[numdisks] = ide3;
