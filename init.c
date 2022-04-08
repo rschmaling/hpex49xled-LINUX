@@ -47,8 +47,8 @@ char* retpath( char* parent, char *delim, int field )
 	if( (copy_parent = (char *)calloc((strlen(parent) + 2), sizeof(char))) == NULL)
 		err(1, "Unable to allocate copy_parnet for copy from char* parent in retpath() ");
 
-	if( !(strcpy(copy_parent, parent)))
-		err(1, "Unable to strcpy() parent into copy_parent in retpath() ");
+	if( strcpy(copy_parent, parent) == NULL)
+		err(1, "Unable to strcpy() parent into copy_parent in %s line %d", __FUNCTION__, __LINE__);
 
 	if(delim == NULL)
 		err(1, "Unknown or illegal delimiter in repath()");
@@ -60,8 +60,8 @@ char* retpath( char* parent, char *delim, int field )
 			// found = last_token;
 			if( (found = (char *)calloc((strlen(last_token) + 2), sizeof(char))) == NULL)
 				err(1, "Unable to allocate found for copy from char * token in retpath() ");
-			if( !(strcpy(found, last_token)))
-				err(1, "Unable to strcpy() token into found in retpath() ");
+			if( strcpy(found, last_token) == NULL)
+				err(1, "Unable to strcpy() last_token into found in %s() line %d ", __FUNCTION__, __LINE__);
 			break;
         }
         last_token = strtok( NULL, delim );
@@ -298,7 +298,7 @@ void* hpex49x_thread_run (void *arg)
 				assert ( nanosleep(&tv, NULL) >= 0);
 				nanosleep(&tv, NULL);
 
-				if ( (led_state != 0)) {
+				if ( led_state != 0 ) {
 					set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
 					set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
 					led_state = 0;
@@ -379,6 +379,7 @@ void* disk_init(void *arg)
 	struct udev *udev = NULL;
 	struct udev_enumerate *enumerate = NULL;
 	struct udev_list_entry *devices = NULL;
+	struct udev_list_entry *dev_list_entry = NULL; 
 	struct udev_device *dev = NULL;
 	char *statpath = NULL;
 	char *ppath = NULL;
@@ -390,50 +391,55 @@ void* disk_init(void *arg)
 		err(1, "Unable to create struct udev in %s line %d ", __FUNCTION__, __LINE__);
 	
 	enumerate = udev_enumerate_new(udev); 
+	if(!enumerate)
+		err(1, "Unable to get struct udev_enumerate in %s line %d", __FUNCTION__, __LINE__);
 
 	udev_enumerate_add_match_subsystem(enumerate, "block");
 	udev_enumerate_add_match_property(enumerate, "ID_BUS", "ata");
 	udev_enumerate_scan_devices(enumerate);
 
 	devices = udev_enumerate_get_list_entry(enumerate);
+	if(!devices)
+		err(1, "Unable to get struct udev_list_entry in %s line %d", __FUNCTION__, __LINE__);
 
-	for( ; devices; devices = udev_list_entry_get_next(devices) ) {
+	udev_list_entry_foreach(dev_list_entry, devices) {
 		const char *path;
 		char *host_bus = NULL;
 		char *find_ATA = NULL;
 		char *check_ATA = NULL;
 
-		path = udev_list_entry_get_name(devices);
-
+		path = udev_list_entry_get_name(dev_list_entry);
 		dev = udev_device_new_from_syspath(udev,path);
 
 		if( !dev )
-			err(1, "Unable to retrieve dev from udev_device_new_from_syspath in %s ", __FUNCTION__);
+			err(1, "Unable to retrieve dev from udev_device_new_from_syspath in %s line %d", __FUNCTION__, __LINE__);
 
-		if( (!(strcmp("ata", udev_device_get_property_value(dev, "ID_BUS")) == 0) && (strcmp("disk", udev_device_get_devtype(dev)) == 0)) || (strcmp("partition", udev_device_get_devtype(dev)) == 0) ) {
+		if(strncmp(udev_device_get_devtype(dev), "partition", 9) == 0 || strncmp(udev_device_get_sysname(dev), "loop", 4) == 0 ) {
 			dev = udev_device_unref(dev);
 			continue;
 		}
 		if( (statpath = (char *)calloc(128, sizeof(char))) == NULL)
-			err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
+			err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
 
 		if( !(strcpy(statpath, path))) 
-			err(1, "Unable to strcpy() path into statpath in %s ", __FUNCTION__);
+			err(1, "Error in return of strcpy() while copying path to statfile in %s line %d ", __FUNCTION__, __LINE__);
 
 		if(! (check_ATA = retpath(statpath, "/", 4)))
 			err(1, "NULL return from retpath in %s line %d", __FUNCTION__, __LINE__);
 
 		/* We only want these host busses as they are associated with the bays ata2, ata3, ata4, ata5 */
-		if( (strcmp("ata0",check_ATA)) == 0 || (strcmp("ata1",check_ATA)) == 0)
+		if( strncmp(check_ATA, "ata0", 4) == 0 || strncmp(check_ATA, "ata1", 4) == 0) {
+			dev = udev_device_unref(dev);
 			continue;
+		}
 
 		if(debug)
 			printf("Device host bus is: %s \n", check_ATA);
 		
-		if( (strcat(statpath, "/stat")) == NULL) 
-			err(1, "Unable to concatinate /stat to path in %s", __FUNCTION__);
+		if( !(strcat(statpath, "/stat"))) 
+			err(1, "Unable to concatinate /stat to path in %s line %d", __FUNCTION__, __LINE__);
 
-		if ( debug ) {
+		if( debug ) {
 			printf("Device Node (/dev) path: %s\n", udev_device_get_devnode(dev));
 			printf("Device sys path is: %s \n", path);
 			printf("Device stat file is at: %s \n", statpath);
@@ -441,21 +447,21 @@ void* disk_init(void *arg)
 		}
 		/* reset to get parent device so we can scrape the last section and determine which bay is in use. */
 		dev = udev_device_get_parent(dev);
-		if (!dev)
-			err(1, "Unable to find parent path of scsi device in %s ", __FUNCTION__);
+		if(!dev)
+			err(1, "Unable to find parent path of scsi device in %s line %d", __FUNCTION__, __LINE__);
 
 		if( (ppath = (char *)calloc( 128 , sizeof(char)) ) == NULL )
-			err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
+			err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
 
 		if( !(strcpy(ppath, udev_device_get_devpath(dev)))) 
-			err(1, "Unable to memcpy() path into statpath in %s ", __FUNCTION__);
+			err(1, "Error in return from strcpy() when copying into ppath in %s line %d", __FUNCTION__, __LINE__);
 
-		if (debug)
+		if(debug)
 			printf("Device parent path is: %s \n", ppath);
 		
 		if( !(host_bus = retpath(ppath,"/",4)))
 			err(1, "NULL return from retpath in %s", __FUNCTION__);
-		if (debug)
+		if(debug)
 			printf("The host controller is : %s \n", host_bus);	
 		if( !(find_ATA = retpath(statpath,"/",4)))
 			err(1, "NULL return from retpath in %s line %d for find_ATA", __FUNCTION__, __LINE__);
@@ -465,8 +471,8 @@ void* disk_init(void *arg)
 
 			if( (ide0.statfile = (char *)calloc(128, sizeof(char))) == NULL)
 				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
-			if( !(strcpy(ide0.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
+			if( strcpy(ide0.statfile, statpath) == NULL) 
+				err(1, "Unable to strcpy() statpath into ide0.statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide0.statfile is: %s \n", ide0.statfile);
 			ide0.hphdd = 1;
@@ -486,8 +492,8 @@ void* disk_init(void *arg)
 		else if( (strcmp("ata3",find_ATA)) == 0 && (strcmp("host2", host_bus)) == 0) {
 			if( (ide1.statfile = (char *)calloc(128, sizeof(char))) == NULL)
 				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d", __FUNCTION__, __LINE__);
-			if( !(strcpy(ide1.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
+			if( strcpy(ide1.statfile, statpath) == NULL) 
+				err(1, "Unable to strcpy() statpath into ide1.statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide1.statfile is: %s \n", ide1.statfile);
 			ide1.hphdd = 2;
@@ -507,8 +513,8 @@ void* disk_init(void *arg)
 		else if( (strcmp("ata4",find_ATA)) == 0 && (strcmp("host3", host_bus)) == 0) {
 			if( (ide2.statfile = (char *)calloc(128, sizeof(char))) == NULL)
 				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s line %d ", __FUNCTION__, __LINE__);
-			if( !(strcpy(ide2.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s line %d ", __FUNCTION__, __LINE__);
+			if( strcpy(ide2.statfile, statpath) == NULL) 
+				err(1, "Unable to strcpy() statpath into ide2.statpath in %s line %d ", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide2.statfile is: %s \n", ide2.statfile);
 			ide2.hphdd = 3;
@@ -528,8 +534,8 @@ void* disk_init(void *arg)
 		else if( (strcmp("ata5",find_ATA)) == 0 && (strcmp("host4", host_bus)) == 0) {
 			if( (ide3.statfile = (char *)calloc(128, sizeof(char))) == NULL)
 				err(1, "Unable to allocate statfile for copy from udev_list_entry_get_name() in %s ", __FUNCTION__);
-			if( !(strcpy(ide3.statfile, statpath))) 
-				err(1, "Unable to strcpy() path into statpath in %s line %d", __FUNCTION__, __LINE__);
+			if( strcpy(ide3.statfile, statpath) == NULL ) 
+				err(1, "Unable to strcpy() statpath into ide3.statpath in %s line %d", __FUNCTION__, __LINE__);
 			if(debug)
 				printf("ide3.statfile is: %s \n", ide3.statfile);
 			ide3.hphdd = 4;

@@ -24,7 +24,6 @@ ifeq ($(PREFIX),)
        PREFIX := /usr/local
 endif
 
-
 all: clean ${TARGETS}
 
 ${OBJS}: hpex49xled.c init.c updatemonitor.c
@@ -43,7 +42,7 @@ clean:
 
 .PHONY: install
 
-install: all
+install:
 	test -f $(RCPREFIX)$(RCFILE) || install -m 644 $(RCFILE) $(RCPREFIX)
 	install -s -m 700 $(TARGETS) $(PREFIX)/bin/
 
