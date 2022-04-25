@@ -1,6 +1,5 @@
 #define _GNU_SOURCE 
 #include "init_led.h"
-#define _GNU_SOURCE
 /////////////////////////////////////////////////////////////////////////////
 /////// @file init.c
 ///////
@@ -51,7 +50,7 @@ char* retpath( char* parent, char *delim, int field )
 		err(1, "Unable to strcpy() parent into copy_parent in %s line %d", __FUNCTION__, __LINE__);
 
 	if(delim == NULL)
-		err(1, "Unknown or illegal delimiter in repath()");
+		err(1, "Unknown or illegal delimiter in repath() in %s line %d", __FUNCTION__, __LINE__);
 
 	last_token = strtok( copy_parent, delim);
 
@@ -96,10 +95,6 @@ size_t retbytes(char* statfile, int field, uint64_t *operations)
 
         while( (fgets(buffer, BUFFER_SIZE, input_file) != NULL)) {
 
-		if( debug ) {
-            		fputs( buffer, stdout );
-		}
-
             last_token = strtok( buffer, delimiter_characters );
 
             while( (last_token != NULL) && (token <= field) ){
@@ -107,9 +102,6 @@ size_t retbytes(char* statfile, int field, uint64_t *operations)
                         *operations = strtoul( last_token, &end, 10 );
 					if(*end)
 						err(1, "Unable to convert string to int64_t in %s line %d", __FUNCTION__, __LINE__);
-
-					if(debug)
-                        	printf("The value of field %i is %ld \n", token, *operations);
 					break;
                 }
                 last_token = strtok( NULL, delimiter_characters );
@@ -136,84 +128,116 @@ void* acer_thread_run (void *arg)
 	struct hpled hpex49x = *(struct hpled *)arg;
 	int led_state = 0;
 	struct timespec tv = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
+	struct timespec blink = { .tv_sec = 0, .tv_nsec = 7500000 };
 	pthread_t thId = pthread_self();
 
 	while(thread_run) {
 
-			if( (pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK ){
-				
-				thread_run = 0;
-				pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
-				syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d",thId, __FUNCTION__, __LINE__ );
-				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
+		if ((pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK)
+		{
+
+			thread_run = 0;
+			pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
+			syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d", thId, __FUNCTION__, __LINE__);
+			err(1, "Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
+		}
+
+		if ((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
+			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+
+		if ((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0)
+			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+
+		if ((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
+			err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
+
+		if (debug)
+			printf("the disk is: %li \n", hpex49x.hphdd);
+
+		if ((hpex49x.rio != hpex49x.n_rio) && (hpex49x.wio != hpex49x.n_wio))
+		{
+
+			hpex49x.rio = hpex49x.n_rio;
+			hpex49x.wio = hpex49x.n_wio;
+
+			if (debug)
+			{
+				printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
 			}
-
-			if((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
-				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-
-			if((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0 )
-				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-
-			if((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
-				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
-
-			if(debug)
-				printf("the disk is: %li \n", hpex49x.hphdd);
-
-			if( ( hpex49x.rio != hpex49x.n_rio ) && ( hpex49x.wio != hpex49x.n_wio) ) {
-
-				hpex49x.rio = hpex49x.n_rio;
-				hpex49x.wio = hpex49x.n_wio;
-
-				if(debug) {
-					printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				// void set_acer_led( int led_type, int state, size_t led ) 
-				set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
-				set_acer_led(LED_RED, ON, hpex49x.red, thId);
-				led_state = 1;
-
-			}
-			else if( hpex49x.rio != hpex49x.n_rio ) {
-
-				hpex49x.rio = hpex49x.n_rio;
-
-				if(debug) {
-					printf("Read I/O only and is: %li \n", hpex49x.n_rio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
-				set_acer_led(LED_RED, ON, hpex49x.red, thId);
-				led_state = 1;
-			}
-			else if( hpex49x.wio != hpex49x.n_wio ) {
-
-				hpex49x.wio = hpex49x.n_wio;
-
-				if(debug) {
-					printf("Write I/O only and is: %li \n", hpex49x.n_wio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
+			/* the lights are on and we want them to blink. Turn them off, wait, turn them on, wait, rinse...repeat */
+			if (led_state)
+			{
+				set_acer_led(LED_BLUE, OFF, hpex49x.blue, thId);
 				set_acer_led(LED_RED, OFF, hpex49x.red, thId);
-				led_state = 1;
-			}
-			else {
-				assert( nanosleep(&tv, NULL) >= 0);
-				nanosleep(&tv, NULL);
 
-				if ( (led_state != 0)) {
-					set_acer_led(LED_BLUE, OFF, hpex49x.blue, thId);
-					set_acer_led(LED_RED, OFF, hpex49x.red, thId);
-					led_state = 0;
-				}
-				continue;
-
+				nanosleep(&blink, NULL);
 			}
+			// void set_acer_led( int led_type, int state, size_t led )
+			set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_acer_led(LED_RED, ON, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else if (hpex49x.rio != hpex49x.n_rio)
+		{
+
+			hpex49x.rio = hpex49x.n_rio;
+
+			if (debug)
+			{
+				printf("Read I/O only and is: %li \n", hpex49x.n_rio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
+			}
+			if (led_state)
+			{
+				set_acer_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_acer_led(LED_RED, OFF, hpex49x.red, thId);
+
+				nanosleep(&blink, NULL);
+			}
+			set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_acer_led(LED_RED, ON, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else if (hpex49x.wio != hpex49x.n_wio)
+		{
+
+			hpex49x.wio = hpex49x.n_wio;
+
+			if (debug)
+			{
+				printf("Write I/O only and is: %li \n", hpex49x.n_wio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
+			}
+			if (led_state)
+			{
+				set_acer_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_acer_led(LED_RED, OFF, hpex49x.red, thId);
+
+				nanosleep(&blink, NULL);
+			}
+			set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_acer_led(LED_RED, OFF, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else
+		{
+			nanosleep(&tv, NULL);
+
+			if ((led_state != 0))
+			{
+				set_acer_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_acer_led(LED_RED, OFF, hpex49x.red, thId);
+				led_state = 0;
+			}
+			continue;
+		}
 	}
 	pthread_exit(NULL);   
 
@@ -225,87 +249,112 @@ void* hpex49x_thread_run (void *arg)
 	struct hpled hpex49x = *(struct hpled *)arg;
 	int led_state = 0;
 	struct timespec tv = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
+	struct timespec blink = { .tv_sec = 0, .tv_nsec = 7500000 };
 	pthread_t thId = pthread_self();
 
 	while(thread_run) {
 
-			if( (pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK ){
+		if ((pthread_spin_lock(&hpex49x_gpio_lock)) == EDEADLOCK)
+		{
 
-				thread_run = 0;
-				pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
-				syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d",thId, __FUNCTION__, __LINE__ );
-				err(1,"Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d",thId, __FUNCTION__, __LINE__);
+			thread_run = 0;
+			pthread_spin_unlock(&hpex49x_gpio_lock); /* bailing out anyway - no need to check for the return here */
+			syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d", thId, __FUNCTION__, __LINE__);
+			err(1, "Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
+		}
+		if ((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
+			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+
+		if ((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0)
+			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+
+		if ((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
+			err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
+
+		if ((hpex49x.rio != hpex49x.n_rio) && (hpex49x.wio != hpex49x.n_wio))
+		{
+
+			hpex49x.rio = hpex49x.n_rio;
+			hpex49x.wio = hpex49x.n_wio;
+
+			if (debug)
+			{
+				printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
 			}
-			if((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
-				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-			
-			if((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0 )
-				err(1,"Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-
-			if( (pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
-				err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
-			
-			if(debug)
-				printf("the disk is: %li \n", hpex49x.hphdd);
-
-			if( ( hpex49x.rio != hpex49x.n_rio ) && ( hpex49x.wio != hpex49x.n_wio) ) {
-
-				hpex49x.rio = hpex49x.n_rio;
-				hpex49x.wio = hpex49x.n_wio;
-
-				if(debug) {
-					printf("Read I/O = %li Write I/O = %li \n", hpex49x.n_rio, hpex49x.n_wio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				// void set_hpex_led( int led_type, int state, size_t led ) 
-				// led_state = led_set(hpex49x.hphdd, PURPLE_CASE, led_light);
-				set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
-				set_hpex_led(LED_RED, ON, hpex49x.red, thId);
-				led_state = 1;
-
-			}
-			else if( hpex49x.rio != hpex49x.n_rio ) {
-
-				hpex49x.rio = hpex49x.n_rio;
-
-				if(debug) {
-					printf("Read I/O only and is: %li \n", hpex49x.n_rio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
-				set_hpex_led(LED_RED, ON, hpex49x.red, thId);
-				led_state = 1;
-			}
-			else if( hpex49x.wio != hpex49x.n_wio ) {
-
-				hpex49x.wio = hpex49x.n_wio;
-
-				if(debug) {
-					printf("Write I/O only and is: %li \n", hpex49x.n_wio);
-					printf("HP HDD is: %li \n", hpex49x.hphdd);
-					printf("Thread ID: %ld \n",thId);
-				}
-				set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
+			/* the lights are on and we want them to blink. Turn them off, wait, turn them on, wait, rinse...repeat */
+			if (led_state)
+			{
+				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
 				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
-				// if(hpex49x.hphdd == 4) // this is how I discovered the race condition....
-				//	printf("Firing %ld - Write IO is: %ld \n", hpex49x.hphdd, n_wio);
-				led_state = 1;
-			}
-			else {
-				/* turn off the active light */
-				assert ( nanosleep(&tv, NULL) >= 0);
-				nanosleep(&tv, NULL);
 
-				if ( led_state != 0 ) {
-					set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
-					set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
-					led_state = 0;
-				}
-				continue;
-
+				nanosleep(&blink, NULL);
 			}
+			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else if (hpex49x.rio != hpex49x.n_rio)
+		{
+
+			hpex49x.rio = hpex49x.n_rio;
+
+			if (debug)
+			{
+				printf("Read I/O only and is: %li \n", hpex49x.n_rio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
+			}
+			if (led_state)
+			{
+				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
+
+				nanosleep(&blink, NULL);
+			}
+			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else if (hpex49x.wio != hpex49x.n_wio)
+		{
+
+			hpex49x.wio = hpex49x.n_wio;
+
+			if (debug)
+			{
+				printf("Write I/O only and is: %li \n", hpex49x.n_wio);
+				printf("HP HDD is: %li \n", hpex49x.hphdd);
+				printf("Thread ID: %ld \n", thId);
+			}
+			if (led_state)
+			{
+				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
+
+				nanosleep(&blink, NULL);
+			}
+			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
+			set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
+			nanosleep(&blink, NULL);
+			led_state = 1;
+		}
+		else
+		{
+			/* turn off the active light */
+			nanosleep(&tv, NULL);
+
+			if (led_state != 0)
+			{
+				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
+				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
+				led_state = 0;
+			}
+			continue;
+		}
 	}
 	pthread_exit(NULL);   
 
