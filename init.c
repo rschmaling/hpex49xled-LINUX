@@ -176,7 +176,7 @@ void* acer_thread_run (void *arg)
 			}
 			// void set_acer_led( int led_type, int state, size_t led )
 			set_acer_led(LED_BLUE, ON, hpex49x.blue, thId);
-			set_acer_led(LED_RED, ON, hpex49x.red, thId);
+			set_acer_led(LED_RED, OFF, hpex49x.red, thId);
 			nanosleep(&blink, NULL);
 			led_state = 1;
 		}
@@ -292,7 +292,7 @@ void* hpex49x_thread_run (void *arg)
 				nanosleep(&t_blink, NULL);
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
-			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
+			set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
 			nanosleep(&t_blink, NULL);
 			led_state = 1;
 		}
