@@ -1,8 +1,6 @@
 #ifndef INCLUDED_INIT_LED
 #define INCLUDED_INIT_LED
-
 #define _GNU_SOURCE 
-#define _GNU_SOURCE
 /////////////////////////////////////////////////////////////////////////////
 /////// @file init_led.h
 ///////
@@ -54,7 +52,8 @@
 #include <syslog.h>
 
 #define BUFFER_SIZE 1024 
-#define BLINK_DELAY 50000000 // for nanosleep() timespec struct - blinking delay for LEDs in nanoseconds
+#define LED_DELAY 50000000 // for nanosleep() timespec struct - blinking delay for LEDs in nanoseconds
+#define BLINK_DELAY 8500000 // for nanosleep() timespec struct - blinking delay for LEDs in nanoseconds
 
 // #define _POSIX_C_SOURCE  200809L
 // #define  _ISOC99_SOURCE 

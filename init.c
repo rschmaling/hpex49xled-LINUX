@@ -248,8 +248,8 @@ void* hpex49x_thread_run (void *arg)
 {
 	struct hpled hpex49x = *(struct hpled *)arg;
 	int led_state = 0;
-	struct timespec tv = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
-	struct timespec blink = { .tv_sec = 0, .tv_nsec = 7500000 };
+	struct timespec t_led = { .tv_sec = 0, .tv_nsec = LED_DELAY };
+	struct timespec t_blink = { .tv_sec = 0, .tv_nsec = BLINK_DELAY };
 	pthread_t thId = pthread_self();
 
 	while(thread_run) {
@@ -289,11 +289,11 @@ void* hpex49x_thread_run (void *arg)
 				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
 				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
 
-				nanosleep(&blink, NULL);
+				nanosleep(&t_blink, NULL);
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
-			nanosleep(&blink, NULL);
+			nanosleep(&t_blink, NULL);
 			led_state = 1;
 		}
 		else if (hpex49x.rio != hpex49x.n_rio)
@@ -312,11 +312,11 @@ void* hpex49x_thread_run (void *arg)
 				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
 				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
 
-				nanosleep(&blink, NULL);
+				nanosleep(&t_blink, NULL);
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
-			nanosleep(&blink, NULL);
+			nanosleep(&t_blink, NULL);
 			led_state = 1;
 		}
 		else if (hpex49x.wio != hpex49x.n_wio)
@@ -335,18 +335,17 @@ void* hpex49x_thread_run (void *arg)
 				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
 				set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
 
-				nanosleep(&blink, NULL);
+				nanosleep(&t_blink, NULL);
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
-			nanosleep(&blink, NULL);
+			nanosleep(&t_blink, NULL);
 			led_state = 1;
 		}
 		else
 		{
 			/* turn off the active light */
-			nanosleep(&tv, NULL);
-
+			nanosleep(&t_led, NULL);
 			if (led_state != 0)
 			{
 				set_hpex_led(LED_BLUE, OFF, hpex49x.blue, thId);
