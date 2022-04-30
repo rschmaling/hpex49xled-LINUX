@@ -76,8 +76,32 @@ char* retpath( char* parent, char *delim, int field )
     return found;
 }
 /////////////////////////////////////////////////////////////////////
+///// New parse function - scan stat file in, return pointers to specified stats
+size_t parse_stat(char* statfile, uint64_t* rd_ios, uint64_t* w_ios)
+{
+	FILE *stats;
+	int in, w_ticks, in_flight, io_ticks, time_in_queue, discard_ticks, flush_ticks;
+	u_int64_t rd_merges, rd_sectors, rd_ticks, w_merges, w_sectors;
+	u_int64_t discard_ios, discard_merges, discard_sectors, flush_ios;
+
+	if ((stats = fopen(statfile, "r")) == NULL)
+		err(1, "Unable to open %s for reading in %s line %d", statfile, __FUNCTION__, __LINE__);
+
+	in = fscanf(stats, "%lu %lu %lu %lu %lu %lu %lu %u %u %u %u %lu %lu %lu %u %lu %u",
+				rd_ios, &rd_merges, &rd_sectors, &rd_ticks, w_ios, &w_merges, &w_sectors, &w_ticks, &in_flight,
+				&io_ticks, &time_in_queue, &discard_ios, &discard_merges, &discard_sectors, &discard_ticks,
+				&flush_ios, &flush_ticks);
+
+	if (in < 17)
+		err(1, "Values of stat file missing. Expected 17 but received %u in %s line %d", in, __FUNCTION__, __LINE__);
+
+	fclose(stats);
+
+	return ((*rd_ios) && (*w_ios) >= 0) ? 1 : 0;
+}
+/////////////////////////////////////////////////////////////////////
 //// parse the statfile and get I/O read and I/O write
-size_t retbytes(char* statfile, int field, uint64_t *operations)
+size_t retbytes(char* statfile, int field, uint64_t* operations)
 {
     const char *delimiter_characters = " ";
     char buffer[ BUFFER_SIZE ];
@@ -141,12 +165,8 @@ void* acer_thread_run (void *arg)
 			syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d", thId, __FUNCTION__, __LINE__);
 			err(1, "Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
 		}
-
-		if ((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
-			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-
-		if ((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0)
-			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+		if ((parse_stat(hpex49x.statfile, &hpex49x.n_rio, &hpex49x.n_wio)) == 0)
+			err(1, "Bad return from parse_stat() in %s line %d", __FUNCTION__, __LINE__);
 
 		if ((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 			err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
@@ -262,11 +282,8 @@ void* hpex49x_thread_run (void *arg)
 			syslog(LOG_NOTICE, "Deadlock condition in thread %ld function %s line %d", thId, __FUNCTION__, __LINE__);
 			err(1, "Deadlock return from pthread_spin_lock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
 		}
-		if ((retbytes(hpex49x.statfile, 0, &hpex49x.n_rio)) == 0)
-			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-
-		if ((retbytes(hpex49x.statfile, 4, &hpex49x.n_wio)) == 0)
-			err(1, "Bad return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+		if ((parse_stat(hpex49x.statfile, &hpex49x.n_rio, &hpex49x.n_wio)) == 0)
+			err(1, "Bad return from parse_stat() in %s line %d", __FUNCTION__, __LINE__);
 
 		if ((pthread_spin_unlock(&hpex49x_gpio_lock)) != 0)
 			err(1, "invalid return from pthread_spin_unlock from thread ID %ld in %s line %d", thId, __FUNCTION__, __LINE__);
@@ -293,8 +310,8 @@ void* hpex49x_thread_run (void *arg)
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
-			nanosleep(&t_blink, NULL);
 			led_state = 1;
+			nanosleep(&t_blink, NULL);
 		}
 		else if (hpex49x.rio != hpex49x.n_rio)
 		{
@@ -316,8 +333,8 @@ void* hpex49x_thread_run (void *arg)
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, ON, hpex49x.red, thId);
+			led_state = 1;			
 			nanosleep(&t_blink, NULL);
-			led_state = 1;
 		}
 		else if (hpex49x.wio != hpex49x.n_wio)
 		{
@@ -339,8 +356,8 @@ void* hpex49x_thread_run (void *arg)
 			}
 			set_hpex_led(LED_BLUE, ON, hpex49x.blue, thId);
 			set_hpex_led(LED_RED, OFF, hpex49x.red, thId);
+			led_state = 1;			
 			nanosleep(&t_blink, NULL);
-			led_state = 1;
 		}
 		else
 		{
@@ -524,10 +541,8 @@ void* disk_init(void *arg)
 			if(debug)
 				printf("ide0.statfile is: %s \n", ide0.statfile);
 			ide0.hphdd = 1;
-			if ( (retbytes(ide0.statfile, 0, &ide0.rio)) == 0)
-			       err(1, "Error on return from retbytes() in %s line %d ", __FUNCTION__, __LINE__);
-			if( ( retbytes(ide0.statfile, 4, &ide0.wio)) == 0)
-				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+			if( (parse_stat(ide0.statfile, &ide0.rio, &ide0.wio)) == 0)
+			       err(1, "Error on return from parse_stat() in %s line %d ", __FUNCTION__, __LINE__);
 			ide0.n_rio = 0;
 			ide0.n_wio = 0;	
 			hpex49x[numdisks] = ide0;
@@ -545,10 +560,8 @@ void* disk_init(void *arg)
 			if(debug)
 				printf("ide1.statfile is: %s \n", ide1.statfile);
 			ide1.hphdd = 2;
-			if( ( retbytes(ide1.statfile, 0, &ide1.rio)) == 0)
-			       err(1, "Error on return from retbytes() in %s line %d ", __FUNCTION__, __LINE__);
-			if( ( retbytes(ide1.statfile, 4, &ide1.wio)) == 0)
-				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
+			if( (parse_stat(ide1.statfile, &ide1.rio, &ide1.wio)) == 0)
+			       err(1, "Error on return from parse_stat() in %s line %d ", __FUNCTION__, __LINE__);
 			ide1.n_rio = 0;
 			ide1.n_wio = 0;	
 			hpex49x[numdisks] = ide1;
@@ -566,10 +579,8 @@ void* disk_init(void *arg)
 			if(debug)
 				printf("ide2.statfile is: %s \n", ide2.statfile);
 			ide2.hphdd = 3;
-			if( ( retbytes(ide2.statfile, 0, &ide2.rio)) == 0)
-			       err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);
-			if( ( retbytes(ide2.statfile, 4, &ide2.wio)) == 0)
-				err(1, "Error on return from retbytes() in %s line %d", __FUNCTION__, __LINE__);	
+			if( (parse_stat(ide2.statfile, &ide2.rio, &ide2.wio)) == 0)
+			       err(1, "Error on return from parse_stat() in %s line %d ", __FUNCTION__, __LINE__);
 			ide2.n_rio = 0;
 			ide2.n_wio = 0;
 			hpex49x[numdisks] = ide2;
@@ -587,10 +598,8 @@ void* disk_init(void *arg)
 			if(debug)
 				printf("ide3.statfile is: %s \n", ide3.statfile);
 			ide3.hphdd = 4;
-			if( ( retbytes(ide3.statfile, 0, &ide3.rio)) == 0)
-			       err(1, "Error on return from retbytes in %s line %d ", __FUNCTION__, __LINE__);
-			if( ( retbytes(ide3.statfile, 4, &ide3.wio)) == 0)
-				err(1, "Error on return from retbytes in %s line %d", __FUNCTION__, __LINE__);	
+			if( (parse_stat(ide3.statfile, &ide3.rio, &ide3.wio)) == 0)
+			       err(1, "Error on return from parse_stat() in %s line %d ", __FUNCTION__, __LINE__);
 			ide3.n_rio = 0;
 			ide3.n_wio = 0;
 			hpex49x[numdisks] = ide3;
@@ -710,7 +719,7 @@ size_t initsch5127(const unsigned int vendor)
 		outb( 0x26, sio_addr );
 		const unsigned int in = inb( sio_data );
 		if( debug )
-			printf("In initsch5127 - in is 0x %#08X\n on line %d",in, __LINE__);
+			printf("In %s in is 0x%#08X on line %d \n",__FUNCTION__, in, __LINE__);
 		if ( 0x4e == in ) {
 			outb( IDX_EXIT, sio_addr );
 			
