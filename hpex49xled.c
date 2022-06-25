@@ -130,12 +130,12 @@ size_t get_led_interface(void)
 		printf("--- Bios Version : %s \n", biosVersion);
 	}
 
-	if (strcmp(systemVendor, "Acer") == 0) {
+	if (strncmp(systemVendor, "Acer", 4) == 0) {
 		
 		if(debug) 
 			printf("Recognized SystemVendor: %s \n", systemVendor);
 		
-		if (strcmp(productName, "Aspire easyStore H340") == 0) {
+		if (strncmp(productName, "Aspire easyStore H340", 21) == 0) {
 			// H340
 		
 			if(debug) 
@@ -144,7 +144,7 @@ size_t get_led_interface(void)
 			if (init_h340() ) 
 				return 1;
 		}
-		if (strcmp(productName, "Altos easyStore M2") == 0) {
+		if (strncmp(productName, "Altos easyStore M2", 18) == 0) {
 			// Altos M2
 			if(debug) 
 				printf("Recognized ProductName: %s \n", productName);
@@ -152,7 +152,7 @@ size_t get_led_interface(void)
 			if ( init_acer_altos() ) 
 				return 1;
 		}
-		if (strcmp(productName, "Aspire easyStore H341") == 0 || strcmp(productName, "Aspire easyStore H342") == 0) {
+		if (strncmp(productName, "Aspire easyStore H341", 21) == 0 || strncmp(productName, "Aspire easyStore H342", 21) == 0) {
 			// H341 or H342
 			if(debug) 
 				printf("Recognized ProductName: %s \n", productName);
@@ -161,10 +161,10 @@ size_t get_led_interface(void)
 				return 1;
 		}
 	}
-	else if (strcmp(systemVendor, "LENOVO") == 0) {
+	else if (strncmp(systemVendor, "LENOVO", 6) == 0) {
 		if(debug) 
 			printf("Recognized SystemVendor: %s \n", systemVendor);
-		if (strcmp(productName, "IdeaCentre D400 10023") == 0) {
+		if (strncmp(productName, "IdeaCentre D400 10023", 21) == 0) {
 			// IdeaCentre D400
 			if(debug) 
 				printf("Recognized ProductName: %s \n", productName);
@@ -174,13 +174,13 @@ size_t get_led_interface(void)
 				return 1;
 		}
 	}
-	else if(strcmp(systemVendor, "HP") == 0 ) {
+	else if(strncmp(systemVendor, "HP", 2) == 0 ) {
 		if(debug) 
 			printf("Recognized SystemVendor: %s \n", systemVendor);
-		if(strcmp(productName, "MediaSmart Server") == 0) {
+		if(strncmp(productName, "MediaSmart Server", 17) == 0) {
 			if(debug) 
 				printf("Recognized ProductName: %s \n", productName);
-			if(strcmp("EX49x 1.00", biosVersion) == 0) // validate and let author know if different for your EX49x
+			if(strncmp("EX49x 1.00", biosVersion, 10) == 0) // validate and let author know if different for your EX49x
 				hardware = "HP MediaSmart Server 49X";
 			else
 				hardware = "HP Mediasmart Server 48X";
